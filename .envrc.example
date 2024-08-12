@@ -1,0 +1,9 @@
+source_up
+
+layout pyenv 3.11.6
+
+export TILORES_API_URL="..."
+export TILORES_TOKEN_URL="..."
+export TILORES_CLIENT_ID="..."
+export TILORES_CLIENT_SECRET="..."
+

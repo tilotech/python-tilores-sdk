@@ -1,0 +1,30 @@
+[project]
+name = "tilores-sdk"
+version = "0.1.0"
+authors = [
+  { name="Lukas Rieder", email="lukas@parlant.co" },
+]
+description = "This is the offical SDK to develop with the Tilores entity resolution database."
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["entity-resolution", "tilores", "graph-raq"]
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "requests",
+  "graphql-core",
+  "graphql-query",
+]
+[project.optional-dependencies]
+test = [
+  "pytest==8.3.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/tilotech/python-tilores-sdk"
+Issues = "https://github.com/tilotech/python-tilores-sdk/issues"
+
