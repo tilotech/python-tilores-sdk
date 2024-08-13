@@ -1,4 +1,5 @@
 from graphql import get_introspection_query, build_client_schema, print_schema
+from graphql_query import Operation, Query, Argument, Variable, Field
 from functools import cached_property
 import requests
 import time
@@ -23,7 +24,8 @@ class TiloresAPI:
         self._access_token = None
         self._access_token_expires_at = None
         self._search_params = None
-        self._fields = None
+        self._record_fields = None
+        self._record_params = None
 
     @classmethod
     def from_environ(cls, **kwargs):
@@ -35,28 +37,30 @@ class TiloresAPI:
             **kwargs
         )
 
+    def fetch_access_token(self):
+        response = requests.post(
+            self.token_url,
+            auth=(self.client_id, self.client_secret),
+            data={'grant_type': 'client_credentials', 'scope': ' '.join(self.scope)},
+        )
+        response.raise_for_status()
+        data = response.json()
+        return (data['access_token'], data['expires_in'])
+
     @property
     def access_token(self):
         """Get the access token, refreshing it if necessary."""
         now = int(time.time())
-        if self._access_token_expires_at and self._access_token_expires_at < now:
+        if self._access_token_expires_at and self._access_token_expires_at > now:
             return self._access_token
         else:
-            self._access_token_expires_at = None
-            self._access_token = None
-            response = requests.post(
-                self.token_url,
-                auth=(self.client_id, self.client_secret),
-                data={'grant_type': 'client_credentials', 'scope': ' '.join(self.scope)},
-            )
-            response.raise_for_status()
-            data = response.json()
-            self._access_token = data['access_token']
-            self._access_token_expires_at = now + data['expires_in']
+            access_token, expires_in = self.fetch_access_token()
+            self._access_token = access_token
+            self._access_token_expires_at = now + expires_in
             return self._access_token
 
     @cached_property
-    def gql_schema(self):
+    def schema(self):
         result = self.gql(get_introspection_query(descriptions=True))
         return build_client_schema(result['data'])
 
@@ -78,88 +82,67 @@ class TiloresAPI:
 
     @property
     def search_params(self, refresh=False):
-        """Get a list of search parameter names and types for the search query."""
+        """Get a list of tuples of search parameter names and types for the search query."""
         if not refresh and self._search_params is not None:
             return self._search_params
-        data = self.gql("""
-            {
-                __type(name: "SearchParams") {
-                    name
-                    kind
-                    inputFields {
-                        name
-                        description
-                        type {
-                            name
-                            kind
-                        }
-                    }
-                }
-            }
-        """)
-        fields = [(field['name'], field['type']['name']) for field in data['data']['__type']['inputFields']]
-        self._search_params = fields
+        self._search_params = []
+        for name, graphql_input_field in self.schema.get_type('SearchParams').fields.items():
+            self._search_params.append((name, graphql_input_field.type))
         return self._search_params
 
     @property
-    def fields(self, refresh=False):
-        """Get a list of field names and their type for the Record-type."""
-        if not refresh and self._fields is not None:
-            return self._fields
-        data = self.gql("""
-            {
-                __type(name: "Record") {
-                    name
-                    kind
-                    fields {
-                        name
-                        description
-                        type {
-                            name
-                            kind
-                        }
-                    }
-                }
-            }
-        """)
-        fields = [(field['name'], field['type']['name']) for field in data['data']['__type']['fields']]
-        self._fields = fields
-        return self._fields
+    def record_fields(self, refresh=False):
+        """Get a list of tuples of field names and their type for the Record-type."""
+        if not refresh and self._record_fields is not None:
+            return self._record_fields
+        self._record_fields = []
+        for name, graphql_field in self.schema.get_type('Record').fields.items():
+            self._record_fields.append((name, graphql_field.type))
+        return self._record_fields
+
+    @property
+    def record_params(self, refresh=False):
+        """Get a list of tuples of field names and their type for the RecordInput-type."""
+        if not refresh and self._record_params is not None:
+            return self._record_params
+        self._record_params = []
+        for name, graphql_input_field in self.schema.get_type('RecordInput').fields.items():
+            self._record_params.append((name, graphql_input_field.type))
+        return self._record_params
 
     def search(self, **params):
         """Perform a search query with the given parameters."""
-        query = """
-            query search($params: SearchParams!) {
-                search(input: { parameters: $params }) {
-                    entities {
-                        id
-                        hits
-                        records {
-                            id
-                            $$fields$$
-                        }
-                    }
-                }
-            }
-        """
-        data = self.gql(query.replace('$$fields$$', '\n'.join(params.keys())), variables={"params": params})
-        return data
-
-if __name__ == "__main__":
-    import os
-    TILORES_API_URL = os.environ['TILORES_API_URL']
-    TILORES_TOKEN_URL = os.environ['TILORES_TOKEN_URL']
-    TILORES_CLIENT_ID = os.environ['TILORES_CLIENT_ID']
-    TILORES_CLIENT_SECRET = os.environ['TILORES_CLIENT_SECRET']
-
-    tilores = TiloresAPI(
-        api_url=TILORES_API_URL,
-        token_url=TILORES_TOKEN_URL,
-        client_id=TILORES_CLIENT_ID,
-        client_secret=TILORES_CLIENT_SECRET
-    )
-    print(f'searchParams: {tilores.search_params}')
-    tilores.search({"first_name": "John"})
-    import pdb; pdb.set_trace()
-    print('okthxbye')
+        actual_record_field_names = [x for (x, _) in self.record_fields]
+        record_fields = []
+        for key in params.keys():
+            if key == 'id':
+                continue
+            assert key in actual_record_field_names, f'Invalid record field name: "{key}", not found in Record field names.'
+            record_fields.append(key)
+        [key for key in params.keys() if key != 'id']
+        var_params = Variable(name='params', type='SearchParams!')
+        operation = Operation(
+            type='query',
+            name='search',
+            variables=[var_params],
+            queries=[
+                Query(
+                    name='search',
+                    arguments=[
+                        Argument(name='input', value=Argument(name='parameters', value=var_params))
+                    ],
+                    fields=[
+                        Field(name='entities', fields=[
+                            'id',
+                            'hits',
+                            Field(name='records', fields=[
+                                'id',
+                                *record_fields
+                            ])
+                        ])
+                    ]
+                )
+            ]
+        )
+        return self.gql(operation.render(), variables={'params': params})
 
