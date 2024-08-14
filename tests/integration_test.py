@@ -114,7 +114,7 @@ class IntegrationTest(unittest.TestCase):
         with self.tilores.build_golden_record('record') as gr:
             gr.frequency_distribution('first_name')
             gr.frequency_distribution('last_name')
-            gr.newest('receivedDate', alias='address', values=['street', 'address_line', 'housenumber', 'postal_code', 'zip', 'city'])
+            gr.newest('receivedDate', alias='address', fields=['street', 'address_line', 'housenumber', 'postal_code', 'zip', 'city'])
             gr.values_distinct('email')
             gr.values_distinct('birthday')
         result = self.tilores.fetch_golden_record('record', 'a9165dc9-0597-4ad6-bfe1-abb424648284')

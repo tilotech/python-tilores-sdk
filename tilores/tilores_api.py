@@ -25,9 +25,6 @@ class TiloresAPI:
         self.scope = scope or ["tilores/mutation.submit", "tilores/query.search", "tilores/query.entity"]
         self._access_token = None
         self._access_token_expires_at = None
-        self._search_params = None
-        self._record_fields = None
-        self._record_params = None
         self._golden_records = {}
 
     @classmethod
@@ -83,35 +80,44 @@ class TiloresAPI:
         response.raise_for_status()
         return response.json()
 
-    @property
-    def search_params(self, refresh=False):
+    @cached_property
+    def search_params(self):
         """Get a list of tuples of search parameter names and types for the search query."""
-        if not refresh and self._search_params is not None:
-            return self._search_params
-        self._search_params = []
+        search_params = []
         for name, graphql_input_field in self.schema.get_type('SearchParams').fields.items():
-            self._search_params.append((name, graphql_input_field.type))
-        return self._search_params
+            search_params.append((name, graphql_input_field.type))
+        return search_params
 
-    @property
-    def record_fields(self, refresh=False):
+    @cached_property
+    def search_param_names(self):
+        """Get a list of search parameter names for the search query."""
+        return [x for (x, _) in self.search_params]
+
+    @cached_property
+    def record_fields(self):
         """Get a list of tuples of field names and their type for the Record-type."""
-        if not refresh and self._record_fields is not None:
-            return self._record_fields
-        self._record_fields = []
+        record_fields = []
         for name, graphql_field in self.schema.get_type('Record').fields.items():
-            self._record_fields.append((name, graphql_field.type))
-        return self._record_fields
+            record_fields.append((name, graphql_field.type))
+        return record_fields
 
-    @property
+    @cached_property
+    def record_field_names(self):
+        """Get a list of field names for the Record-type."""
+        return [x for (x, _) in self.record_fields]
+
+    @cached_property
     def record_params(self, refresh=False):
         """Get a list of tuples of field names and their type for the RecordInput-type."""
-        if not refresh and self._record_params is not None:
-            return self._record_params
-        self._record_params = []
+        record_params = []
         for name, graphql_input_field in self.schema.get_type('RecordInput').fields.items():
-            self._record_params.append((name, graphql_input_field.type))
-        return self._record_params
+            record_params.append((name, graphql_input_field.type))
+        return record_params
+
+    @cached_property
+    def record_param_names(self):
+        """Get a list of search parameter names for the search query."""
+        return [x for (x, _) in self.record_params]
 
     def search(self, **params):
         """
@@ -119,12 +125,11 @@ class TiloresAPI:
 
         See also: https://docs.tilotech.io/tilores/api/#query-search
         """
-        actual_record_field_names = [x for (x, _) in self.record_fields]
         record_fields = []
         for key in params.keys():
             if key == 'id':
                 continue
-            assert key in actual_record_field_names, f'Invalid record field name: "{key}", not found in Record field names.'
+            assert key in self.record_field_names, f'Invalid record field name: "{key}", not found in Record field names.'
             record_fields.append(key)
         [key for key in params.keys() if key != 'id']
         var_params = Variable(name='params', type='SearchParams!')
@@ -154,8 +159,9 @@ class TiloresAPI:
         return self.gql(operation.render(), variables={'params': params})
 
     @contextmanager
-    def build_golden_record(self, query_alias):
-        record_insights = RecordInsights(alias=query_alias)
+    def build_golden_record(self, query_alias, validate_field_names=True):
+        validate_field_names = validate_field_names and self.record_field_names or None
+        record_insights = RecordInsights(alias=query_alias, validate_field_names=validate_field_names)
         yield record_insights
         self._golden_records[query_alias] = record_insights
         return record_insights
