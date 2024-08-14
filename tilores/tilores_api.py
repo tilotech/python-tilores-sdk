@@ -1,9 +1,11 @@
 from graphql import get_introspection_query, build_client_schema, print_schema
 from graphql_query import Operation, Query, Argument, Variable, Field
 from functools import cached_property
+from contextlib import contextmanager
 import requests
 import time
 import os
+from .record_insights import RecordInsights
 
 class TiloresAPI:
     """A simple API client to interact with a Tilores instance."""
@@ -26,6 +28,7 @@ class TiloresAPI:
         self._search_params = None
         self._record_fields = None
         self._record_params = None
+        self._golden_records = {}
 
     @classmethod
     def from_environ(cls, **kwargs):
@@ -111,7 +114,11 @@ class TiloresAPI:
         return self._record_params
 
     def search(self, **params):
-        """Perform a search query with the given parameters."""
+        """
+        Perform a search query with the given parameters.
+
+        See also: https://docs.tilotech.io/tilores/api/#query-search
+        """
         actual_record_field_names = [x for (x, _) in self.record_fields]
         record_fields = []
         for key in params.keys():
@@ -145,4 +152,40 @@ class TiloresAPI:
             ]
         )
         return self.gql(operation.render(), variables={'params': params})
+
+    @contextmanager
+    def build_golden_record(self, query_alias):
+        record_insights = RecordInsights(alias=query_alias)
+        yield record_insights
+        self._golden_records[query_alias] = record_insights
+        return record_insights
+
+    def fetch_golden_record(self, query_alias:str, id:str):
+        """
+        Retrieve a unified and aggregated version of a single entity using recordInsights.
+
+        See also:
+
+        * https://docs.tilotech.io/tilores/golden-record
+        * https://docs.tilotech.io/tilores/api/#record-insights
+        """
+        record_insights = self._golden_records[query_alias]
+        operation = Operation(
+            type='query',
+            queries=[
+                Query(
+                    name='entity',
+                    arguments=[
+                        Argument(name='input', value=Argument(name='id', value=f'"{id}"'))
+                    ],
+                    fields=[
+                        Field(
+                            name='entity',
+                            fields=[record_insights]
+                        )
+                    ]
+                )
+            ]
+        )
+        return self.gql(operation.render())
 

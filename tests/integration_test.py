@@ -1,5 +1,5 @@
 import unittest
-from tilores import TiloresAPI
+from tilores import TiloresAPI, RecordInsights
 import time
 import graphql
 
@@ -109,6 +109,16 @@ class IntegrationTest(unittest.TestCase):
         # Test that search params are validated against the Record type
         with self.assertRaises(AssertionError):
             self.tilores.search(field_does_not_exist='Sophia')
+
+    def test_golden_record(self):
+        with self.tilores.build_golden_record('record') as gr:
+            gr.frequency_distribution('first_name')
+            gr.frequency_distribution('last_name')
+            gr.newest('receivedDate', alias='address', values=['street', 'address_line', 'housenumber', 'postal_code', 'zip', 'city'])
+            gr.values_distinct('email')
+            gr.values_distinct('birthday')
+        result = self.tilores.fetch_golden_record('record', 'a9165dc9-0597-4ad6-bfe1-abb424648284')
+        self.assertIsNotNone(result)
 
 if __name__ == '__main__':
     unittest.main()
