@@ -1,0 +1,791 @@
+"""
+The @defer directive may be specified on a fragment spread to imply de-prioritization, that causes the fragment to be omitted in the initial response, and delivered as a subsequent response afterward. A query with @defer directive will cause the request to potentially return multiple responses, where non-deferred data is delivered in the initial response and data deferred delivered in a subsequent response. @include and @skip take precedence over @defer.
+"""
+directive @defer(if: Boolean = true, label: String) on FRAGMENT_SPREAD | INLINE_FRAGMENT
+
+directive @goField(forceResolver: Boolean, name: String) on INPUT_FIELD_DEFINITION | FIELD_DEFINITION
+
+directive @goModel(model: String, models: [String!]) on OBJECT | INPUT_OBJECT | SCALAR | ENUM | INTERFACE | UNION
+
+directive @hasPrivilege(privilege: String!) on OBJECT | INPUT_OBJECT | FIELD_DEFINITION | INPUT_FIELD_DEFINITION
+
+type Action {
+  name: String!
+  parameters: Map
+}
+
+scalar Any
+
+"""
+ConnectionBanMeta provides information who removed a connection ban and why.
+"""
+input ConnectionBanMetaInput {
+  user: String!
+  reason: String!
+}
+
+"""DisassembleEdge represents a single edge to be removed."""
+input DisassembleEdgeInput {
+  a: ID!
+  b: ID!
+}
+
+"""DisassembleInput information used for disassemble."""
+input DisassembleInput {
+  edges: [DisassembleEdgeInput!]
+  recordIDs: [ID!]
+  createConnectionBan: Boolean
+  meta: DisassembleMeta
+}
+
+"""
+DisassembleMeta provides information who and why disassemble was started.
+"""
+input DisassembleMeta {
+  user: String!
+  reason: String!
+}
+
+"""
+DisassembleOutput informs about whether the disassemble was triggered or not.
+"""
+type DisassembleOutput {
+  triggered: Boolean!
+}
+
+"""
+A map of duplicates with the key being the original and the values being a
+list of strings containing the IDs of the duplicate records and the original.
+
+Example (in JSON):
+{
+"uuid-original-1": ["uuid-duplicate-1", "uuid-duplicate-2"],
+"uuid-original-2": ["uuid-duplicate-3"]
+}
+
+When using rule groups, the keys have a different format, e.g. G1:uuid-original-1
+"""
+scalar Duplicates
+
+"""
+EdgeInsights provides statistics and aggregation on the entities edges.
+"""
+type EdgeInsights {
+  """
+  Count returns the amount of edges in the provided list.
+  
+  This function does not consider implicit edges based on duplicates.
+  """
+  count: Int!
+
+  """
+  FrequencyDistribution returns how often a rule is present.
+  
+  By default, the results are ordered with the highest percentage first, but it can be changed using the 'sortASC' option.
+  
+  Using the 'top' option it is possible to limit the results to only the n highest or lowest results.
+  
+  This function does not consider implicit rule usages based on duplicates.
+  """
+  frequencyDistribution(top: Int, direction: SortDirection): [FrequencyDistributionEntry!]!
+
+  """
+  Matrix returns a matrix in which it is possible to see the links between each two records and due to which rule or duplicate they are linked.
+  
+  Record combinations without a link between each other will not be part of the output.
+  """
+  matrix(links: [String!]): [EdgeMatrixEntry!]!
+}
+
+"""EdgeMatrixEntry represents a single row of the edge matrix result."""
+type EdgeMatrixEntry {
+  """
+  A and B are the IDs of the two records that are linked with each other.
+  
+  Keep in mind that there is no direction between A and B (undirected edges).
+  """
+  a: String!
+
+  """
+  A and B are the IDs of the two records that are linked with each other.
+  
+  Keep in mind that there is no direction between A and B (undirected edges).
+  """
+  b: String!
+
+  """
+  Links contains the information whether A and B match for a certain rule or duplicate.
+  
+  Links is a map with the key being an ID and the value being a boolean.
+  The ID can either be a rule ID or 'duplicate'. For the special case of using rule groups, the ID of a duplicate will be '<group>:duplicate'.
+  
+  The returned keys in that map depend whether the property 'links' was provided in the request.
+  If links was provided, all the provided IDs will be present as a key in that map.
+  If links was not provided, it will contain the IDs present in all edges and duplicates.
+  """
+  links: Map!
+}
+
+"""
+Entity represents the real object that contains all records that belong to
+that object.
+"""
+type Entity {
+  """Id provides the unique identifier for the entity."""
+  id: ID!
+
+  """Records provides a list with all Records of the entity."""
+  records: [Record!]!
+
+  """
+  Edges define one type of a connection between records within an entity.
+  
+  Example (in JSON):
+  {
+  "edges": ["uuid-record-1:uuid-record-2:RULE-1", "uuid-record-3:uuid-record-4:RULE-2"]
+  }
+  """
+  edges: [String!]!
+
+  """List all duplicate record ids by record id."""
+  duplicates: Duplicates!
+
+  """List all rules satisfied per matched record id."""
+  hits: Hits!
+
+  """
+  Consistency is a score ranged from 0.0 to 1.0 which indicates how consistent the overall data of the entity is.
+  """
+  consistency: Float!
+
+  """
+  EdgeInsights provides statistics and aggregation on the entities edges.
+  """
+  edgeInsights: EdgeInsights!
+
+  """
+  RecordInsights provides filtering, statistics and aggregation on the entities records.
+  """
+  recordInsights: RecordInsights!
+}
+
+"""EntityByRecordInput the data input used for entity by record query."""
+input EntityByRecordInput {
+  """Record ID to search for"""
+  id: ID!
+
+  """
+  Can be used to only consider records that fullfil the provided filter conditions.
+  
+  See SearchInput for further information.
+  """
+  considerRecords: [FilterCondition!]
+}
+
+"""EntityInput the data input used for entity query."""
+input EntityInput {
+  """Entity ID to search for"""
+  id: ID!
+
+  """
+  Can be used to only consider records that fullfil the provided filter conditions.
+  
+  See SearchInput for further information.
+  """
+  considerRecords: [FilterCondition!]
+}
+
+"""SearchOutput the output of entity query."""
+type EntityOutput {
+  entity: Entity
+}
+
+"""
+FilterCondition defines the criteria for filtering a record list.
+
+Each filter condition must have a filter upon which the checks are applied and should have at least one criteria defined.
+
+Some criteria are mutually exclusive due to either logical reasons or type constraints. E.g. lessThan and after cannot be used together due to different type expectations.
+"""
+input FilterCondition {
+  """Field is the field upon which to check the criteria."""
+  field: String!
+
+  """Equals ensures that the fields value is equal to the provided value."""
+  equals: Any
+
+  """IsNull ensures that the field must have a null value."""
+  isNull: Boolean
+
+  """
+  StartsWith ensures that the fields value starts with the provided text.
+  
+  Using startsWith on non-string fields will convert them into strings first. This may lead to unexpected, but correct results.
+  """
+  startsWith: String
+
+  """
+  EndsWith ensures that the fields value ends with the provided text.
+  
+  Using endsWith on non-string fields will convert them into strings first. This may lead to unexpected, but correct results.
+  """
+  endsWith: String
+
+  """
+  likeRegex ensures that the fields value matches the provided regular expression.
+  
+  Using likeRegex on non-string fields will convert them into strings first. This may lead to unexpected, but correct results.
+  """
+  likeRegex: String
+
+  """
+  LessThan ensures that the fields value is less than the provided value.
+  
+  Using lessThan on non-numeric fields will raise an error.
+  """
+  lessThan: Float
+
+  """
+  LessEquals ensures that the fields value is less than or equal to the provided value.
+  
+  Using lessEquals on non-numeric fields will raise an error.
+  """
+  lessEquals: Float
+
+  """
+  GreaterThan ensures that the fields value is greater than the provided value.
+  
+  Using greaterThan on non-numeric fields will raise an error.
+  """
+  greaterThan: Float
+
+  """
+  GreaterEquals ensures that the fields value is greater than or equal to the provided value.
+  
+  Using greaterEquals on non-numeric fields will raise an error.
+  """
+  greaterEquals: Float
+
+  """
+  After ensures that the fields value is after the provided value.
+  
+  Using after on non-time fields will raise an error.
+  """
+  after: Time
+
+  """
+  Since ensures that the fields value is after or at the provided value.
+  
+  Using since on non-time fields will raise an error.
+  """
+  since: Time
+
+  """
+  Before ensures that the fields value is before the provided value.
+  
+  Using before on non-time fields will raise an error.
+  """
+  before: Time
+
+  """
+  Until ensures that the fields value is before or at the provided value.
+  
+  Using before on non-time fields will raise an error.
+  """
+  until: Time
+
+  """Invert negates the results of the checks."""
+  invert: Boolean
+
+  """
+  By default string values are compared with ignored case. Setting case sensitive to true changes this behavior.
+  """
+  caseSensitive: Boolean
+}
+
+"""
+FrequencyDistributionEntry represents a single row of a frequency distribution table.
+"""
+type FrequencyDistributionEntry {
+  """Value holds the value for which the percentage and frequency applies."""
+  value: Any
+
+  """Frequency is the number of records that have the value."""
+  frequency: Int!
+
+  """
+  Percentage is the percentage of records that have the value.
+  
+  For calculating the percentage only non-null values are considered.
+  """
+  percentage: Float!
+}
+
+"""
+Hits lists all rules satisfied per matched record id
+
+Example (in JSON):
+{
+"uuid-record-1": ["RULE-1", "RULE-2"],
+"uuid-record-2": ["RULE-2"]
+}
+"""
+scalar Hits
+
+scalar Map
+
+type Mutation {
+  """
+  Submit adds new records and tries to match them with existing entities.
+  
+  Records that were submitted together are assumed to match with each other, even
+  if they do not have anything in common. If this is not your intended behaviour
+  please send multiple requests or make multiple calls to submit using GraphQL
+  aliases.
+  """
+  submit(input: SubmitInput!): SubmitOutput!
+
+  """
+  SubmitWithPreview adds new records and tries to match them with existing
+  entities and returns a preview of how entities would potentially look like
+  when/if records are ingested.
+  
+  Records that were submitted together are assumed to match with each other, even
+  if they do not have anything in common. If this is not your intended behaviour
+  please send multiple requests or make multiple calls to submit using GraphQL
+  aliases.
+  """
+  submitWithPreview(input: SubmitWithPreviewInput!): SubmitWithPreviewOutput!
+
+  """
+  Disassemble removes one or more edges or even records.
+  
+  Will return amount of effected records and edges, as well as the resulting
+  entity ids, if any.
+  """
+  disassemble(input: DisassembleInput!): DisassembleOutput!
+
+  """RemoveConnectionBan removes a connection ban between entities."""
+  removeConnectionBan(input: RemoveConnectionBanInput!): RemoveConnectionBanOutput!
+}
+
+type Query {
+  """Search searches for entities that match the search parameters."""
+  search(input: SearchInput!): SearchOutput!
+
+  """Entity returns a single entity with the provided id."""
+  entity(input: EntityInput!): EntityOutput!
+
+  """
+  EntityByRecord returns a single entity that contains the record with the provided id.
+  """
+  entityByRecord(input: EntityByRecordInput!): EntityOutput!
+  searchByText(input: SearchByTextInput!): SearchByTextOutput!
+}
+
+type Record {
+  id: ID!
+  source: String
+  first_name: String
+  last_name: String
+  name: String
+  dob: String
+  birthday: String
+  address_line: String
+  street: String
+  housenumber: String
+  postal_code: String
+  zip: String
+  city: String
+  phone: String
+  email: String
+  lat: String
+  lng: String
+  receivedDate: String
+}
+
+input RecordInput {
+  id: ID!
+  source: String
+  first_name: String
+  last_name: String
+  name: String
+  dob: String
+  birthday: String
+  address_line: String
+  street: String
+  housenumber: String
+  postal_code: String
+  city: String
+  phone: String
+  email: String
+  lat: String
+  lng: String
+  receivedDate: String
+}
+
+"""
+RecordInsights provides filtering, statistics and aggregation on the entities records.
+"""
+type RecordInsights {
+  """
+  Records provides a list of Records of the potentially filtered or limited entity records.
+  """
+  records: [Record!]!
+
+  """
+  Filter returns a new RecordInsights that only contains the records for which the FilterCondition applies.
+  
+  If no records match the filter condition, then an empty RecordInsights is returned.
+  """
+  filter(conditions: [FilterCondition!]!): RecordInsights!
+
+  """
+  Sort returns a new RecordInsights that contains the records ordered by the provided SortCriteria.
+  """
+  sort(criteria: [SortCriteria!]!): RecordInsights!
+
+  """
+  Group returns a list of RecordInsights where the records have been grouped by the provided fields.
+  
+  By default the case of the value is ignored.
+  """
+  group(fields: [String!]!, caseSensitive: Boolean): [RecordInsights!]!
+
+  """
+  Limit returns a new RecordInsights that contains up to 'count' records.
+  
+  By default it takes the first records from the list. If offset was provided it will skip 'offset' records.
+  
+  If the list does not provide enough records, then an empty RecordInsights is returned.
+  """
+  limit(count: Int!, offset: Int): RecordInsights!
+
+  """Count returns the amount of records in the currently selected list."""
+  count: Int!
+
+  """
+  CountDistinct returns the number of unique non-null values for the provided field.
+  
+  If multiple fields were provided, then each unique combination of the field values will be considered.
+  If all fields are null, then this does not count as a new value. However, if at least one field has a
+  value, then this does count as a new value.
+  
+  By default the case of the value is ignored.
+  """
+  countDistinct(fields: [String!]!, caseSensitive: Boolean): Int!
+
+  """First returns the first record in the list or null for empty lists."""
+  first: Record
+
+  """Last returns the last record in the list or null for empty lists."""
+  last: Record
+
+  """Values returns all non-null values of the current records."""
+  values(field: String!): [Any]!
+
+  """
+  ValuesDistinct returns all unique non-null values of the current records.
+  
+  By default the case of the value is ignored.
+  """
+  valuesDistinct(field: String!, caseSensitive: Boolean): [Any]!
+
+  """
+  FrequencyDistribution returns how often a non-null value for the provided field is present.
+  
+  By default the results are ordered with the highest priority first, but it can be changed using the 'direction' option.
+  
+  Using the 'top' option it is possible to limit the results to only the n highest or lowest results.
+  """
+  frequencyDistribution(field: String!, caseSensitive: Boolean, top: Int, direction: SortDirection): [FrequencyDistributionEntry!]!
+
+  """
+  Average returns the average value of the provided numeric field.
+  
+  Using average on non-numeric fields will raise an error.
+  Null values are ignored in the calculation.
+  Returns null if all values are null.
+  """
+  average(field: String!): Float
+
+  """
+  Max returns the highest value of the provided numeric field.
+  
+  Using max on non-numeric fields will raise an error.
+  Returns null if all values are null.
+  """
+  max(field: String!): Float
+
+  """
+  Median returns the median value of the provided numeric field.
+  
+  Using median on non-numeric fields will raise an error.
+  Null values are ignored in the calculation.
+  Returns null if all values are null.
+  """
+  median(field: String!): Float
+
+  """
+  Min returns the lowest value of the provided numeric field.
+  
+  Using min on non-numeric fields will raise an error.
+  Returns null if all values are null.
+  """
+  min(field: String!): Float
+
+  """
+  Sum returns the sum of the provided numeric field.
+  
+  Using sum on non-numeric fields will raise an error.
+  Null values are ignored in the calculation.
+  Returns null if all values are null.
+  """
+  sum(field: String!): Float
+
+  """
+  StandardDeviation calculates the standard deviation for the provided numeric field.
+  
+  Using standardDeviation on non-numeric fields will raise an error.
+  Null values are ignored in the calculation.
+  Returns null if all values are null.
+  """
+  standardDeviation(field: String!): Float
+
+  """
+  Confidence describes the probability of having the one truly correct value for the provided path.
+  
+  The resulting value is a float ranging from 0 to 1 representing a percentage.
+  
+  Example: For the values ["a","a","a","b"]
+  
+  a: 3 * 0.75
+  b: 1 * 0.25
+  
+  confidence: 0.625 (62.5%)
+  
+  Null values are ignored in the calculation.
+  Returns null if all values are null.
+  """
+  confidence(field: String!, caseSensitive: Boolean): Float
+
+  """
+  Newest returns the Record for where the provided time field has the highest (most recent) value.
+  
+  Returns null if the list is empty or does not contain records with the provided field.
+  
+  Using newest on non-time fields will raise an error.
+  """
+  newest(field: String!): Record
+
+  """
+  Oldest returns the Record for where the provided time field has the lowest (least recent) value.
+  
+  Returns null if the list is empty or does not contain records with the provided field.
+  
+  Using oldest on non-time fields will raise an error.
+  """
+  oldest(field: String!): Record
+
+  """
+  Flatten merges the values of the provided array field into a single array.
+  
+  Using flatten on non-array fields will raise an error.
+  """
+  flatten(field: String!): [Any]!
+
+  """
+  Flatten merges the values of the provided array field into a single array where each value is unique.
+  
+  By default the case of the value is ignored.
+  """
+  flattenDistinct(field: String!, caseSensitive: Boolean): [Any]!
+}
+
+"""
+RemoveConnectionBanInput information used for removing a connection ban.
+"""
+input RemoveConnectionBanInput {
+  reference: ID!
+  entityID: ID!
+  others: [ID!]!
+  meta: ConnectionBanMetaInput!
+}
+
+"""
+RemoveConnectionBanOutput provides information regarding the connection ban removal.
+"""
+type RemoveConnectionBanOutput {
+  removed: Boolean!
+}
+
+"""SearchByTextInput the data input used for search by text."""
+input SearchByTextInput {
+  """
+  The text describing or representing what to search for. It can be in a
+      structured format (such as JSON or CSV) or unstructured such as paragraph
+      or question.
+  """
+  text: String!
+
+  """
+  By default all entities are returned from the search. When expecting a huge
+      amount of entities, you may want to consider to limit the results. Setting the
+      page parameter enables the paging mode and sets the current page.
+  
+      The first page starts with the number 1.
+  
+      By default each page has 10 entities, but that can be changed with the pageSize
+      parameter.
+  
+      This parameter conflicts with the considerRecords parameter. Its possible to use
+      both parameters at the same time, but the results may be unexpected, because
+      paging is done during search, while considerRecords is done after the search.
+  """
+  page: Int
+
+  """Sets the page size for the paging mentioned in the page parameter."""
+  pageSize: Int
+}
+
+"""SearchByTextOutput the output of search by text query."""
+type SearchByTextOutput {
+  """
+  All entities matching the extracted search parameters based on the search configuration.
+  """
+  entities: [Entity!]!
+
+  """API calls performed by search to get the returned entities"""
+  actions: [Action!]!
+}
+
+"""SearchInput the data input used for search."""
+input SearchInput {
+  """The parameters used to search for entities"""
+  parameters: SearchParams!
+
+  """
+  Can be used to only consider records that fullfil the provided filter conditions.
+  
+  Providing at least one filter will hide the records of that entity that do not
+  match the specified rules. As a result all edges, duplicates and hits will be
+  adjusted accordingly. Special cases like receiving multiple entities or not
+  seeing half of an entity because the only connecting record was ignored. This is
+  usually the desired behaviour, for other use cases consider the record insights
+  feature to apply some filtering.
+  
+  It can be used with a variety of what-if scenarios. E.g. you can see the state
+  of an entity at any given time in the past using the until or before filter
+  condition. Or you could use it to see what will happen when records are going to
+  be deleted due to old age using the after or since condition. Or you could see
+  how an entity would look like without the records from a specific source using
+  equals and invert.
+  
+  For cases when after filtering one original entity is returned as multiple ones,
+  then their entity IDs will be similar to each other, only suffixed with a
+  consecutive number.
+  
+  This parameter conflicts with the page parameter. Its possible to use
+  both parameters at the same time, but the results may be unexpected, because
+  paging is done during search, while considerRecords is done after the search.
+  """
+  considerRecords: [FilterCondition!]
+
+  """
+  By default all entities are returned from the search. When expecting a huge
+  amount of entities, you may want to consider to limit the results. Setting the
+  page parameter enables the paging mode and sets the current page.
+  
+  The first page starts with the number 1.
+  
+  By default each page has 10 entities, but that can be changed with the pageSize
+  parameter.
+  
+  This parameter conflicts with the considerRecords parameter. Its possible to use
+  both parameters at the same time, but the results may be unexpected, because
+  paging is done during search, while considerRecords is done after the search.
+  """
+  page: Int
+
+  """Sets the page size for the paging mentioned in the page parameter."""
+  pageSize: Int
+}
+
+"""SearchOutput the output of search query."""
+type SearchOutput {
+  """
+  All entities matching the search parameters based on the search configuration.
+  """
+  entities: [Entity!]!
+}
+
+input SearchParams {
+  first_name: String
+  last_name: String
+  name: String
+  dob: String
+  birthday: String
+  address_line: String
+  street: String
+  housenumber: String
+  postal_code: String
+  zip: String
+  city: String
+  phone: String
+  email: String
+  lat: String
+  lng: String
+  receivedDate: String
+}
+
+"""SortCriteria defines how to sort."""
+input SortCriteria {
+  """Fields is the field to sort by."""
+  field: String!
+
+  """Direction defines whether to sort ascending or descending."""
+  direction: SortDirection
+}
+
+"""
+SortDirection defines wether to sort from lowest to highest value (ASC) or from highest to lowest value (DESC).
+"""
+enum SortDirection {
+  ASC
+  DESC
+}
+
+"""SubmitInput the data input to be submitted."""
+input SubmitInput {
+  records: [RecordInput!]!
+}
+
+"""
+SubmitOutput provides additional information about a successful data submission.
+"""
+type SubmitOutput {
+  """
+  RecordsAdded returns the amount of records that were provided in the submit request.
+  """
+  recordsAdded: Int!
+}
+
+"""
+SubmitWithPreviewInput the data input to be submitted.
+
+DryRun: an option to get the entities preview as if the provided records were
+ingested without actually ingesting them
+"""
+input SubmitWithPreviewInput {
+  records: [RecordInput!]!
+  dryRun: Boolean
+}
+
+"""
+SubmitWithPreviewOutput provides a preview of how the entities could potentially look like if/when ingested.
+"""
+type SubmitWithPreviewOutput {
+  entities: [Entity!]!
+}
+
+scalar Time

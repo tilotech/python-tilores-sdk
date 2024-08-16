@@ -120,6 +120,16 @@ class IntegrationTest(unittest.TestCase):
         result = self.tilores.fetch_golden_record('record', 'a9165dc9-0597-4ad6-bfe1-abb424648284')
         self.assertIsNotNone(result)
 
+    def test_generate_dataclasses(self):
+        """
+        Test converting a Tilores GraphQL schema to dataclasses.
+        """
+        from tilores.helpers import PydanticFactory
+        references = PydanticFactory(self.tilores.schema).generate()
+        assert 'Record' in references
+        assert 'RecordInput' in references
+        assert 'SearchParams' in references
+
 if __name__ == '__main__':
     unittest.main()
 
