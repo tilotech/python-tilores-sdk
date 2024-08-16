@@ -15,9 +15,9 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "requests",
-  "graphql-core",
-  "graphql-query",
+  "requests>=2.32.3",
+  "graphql-core>=3.2.3",
+  "graphql-query>=1.4.0",
 ]
 [project.optional-dependencies]
 test = [
