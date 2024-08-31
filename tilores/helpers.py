@@ -1,40 +1,4 @@
-from datamodel_code_generator.parser.graphql import GraphQLParser
 import graphql
-
-def generate_dataclasses(gql_schema):
-    gql_schema = graphql.lexicographic_sort_schema(gql_schema)
-    parser = GraphQLParser('',
-        use_schema_description=True,
-        use_field_description=True,
-    )
-    parser.raw_obj = gql_schema
-    parser.all_graphql_objects = {}
-    parser.references = {}
-    parser.support_graphql_types = {
-        graphql.type.introspection.TypeKind.SCALAR: [],
-        graphql.type.introspection.TypeKind.ENUM: [],
-        graphql.type.introspection.TypeKind.UNION: [],
-        graphql.type.introspection.TypeKind.INTERFACE: [],
-        graphql.type.introspection.TypeKind.OBJECT: [],
-        graphql.type.introspection.TypeKind.INPUT_OBJECT: [],
-    }
-    _mapper_from_graphql_type_to_parser_method = {
-        graphql.type.introspection.TypeKind.SCALAR: parser.parse_scalar,
-        graphql.type.introspection.TypeKind.ENUM: parser.parse_enum,
-        graphql.type.introspection.TypeKind.INTERFACE: parser.parse_interface,
-        graphql.type.introspection.TypeKind.OBJECT: parser.parse_object,
-        graphql.type.introspection.TypeKind.INPUT_OBJECT: parser.parse_input_object,
-        graphql.type.introspection.TypeKind.UNION: parser.parse_union,
-    }
-    parser._resolve_types('', gql_schema)
-    for next_type in parser.parse_order:
-        for obj in parser.support_graphql_types[next_type]:
-            parser_ = _mapper_from_graphql_type_to_parser_method[next_type]
-            parser_(obj)  # type: ignore
-
-    models = {}
-    return {k:v.source for k, v in parser.references.items()}
-
 import typing
 from enum import Enum
 import datetime

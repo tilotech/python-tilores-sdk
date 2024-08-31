@@ -7,7 +7,7 @@ authors = [
 description = "This is the offical SDK to develop with the Tilores entity resolution database."
 readme = "README.md"
 license = {file = "LICENSE"}
-keywords = ["entity-resolution", "tilores", "graph-raq"]
+keywords = ["entity-resolution", "tilores", "graph-rag"]
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",

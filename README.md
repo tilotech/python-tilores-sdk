@@ -38,6 +38,7 @@ $ pip install tilores-sdk
 import os
 from tilores import TiloresAPI
 
+# Initialize the TiloresAPI (or use `TiloresAPI.from_environ()`)
 tilores = TiloresAPI(
     api_url=os.environ['TILORES_API_URL'],
     token_url=os.environ['TILORES_TOKEN_URL'],
@@ -59,5 +60,5 @@ The Tilores SDK supports the following features of the Tilores API:
 
 In addition to that, it provides various convenience helpers to integrate with the Python ecosystem:
 
-* Create dataclasses and pydantic base classes from the Tilores schema
+* Create pydantic base classes from the Tilores schema
 
