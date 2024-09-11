@@ -1,0 +1,77 @@
+input RecordInput {
+    id: ID!
+    source: String
+
+    first_name: String
+    last_name: String
+    name: String
+
+    dob: String
+    birthday: String
+
+    address_line: String
+    street: String
+    housenumber: String
+
+    postal_code: String
+
+    city: String
+
+    phone: String
+    email: String
+    lat: String
+    lng: String
+    receivedDate: String
+}
+
+type Record {
+    id: ID!
+    source: String
+
+    first_name: String
+    last_name: String
+    name: String
+
+    dob: String
+    birthday: String
+
+    address_line: String
+    street: String
+    housenumber: String
+
+    postal_code: String
+    zip: String
+
+    city: String
+
+    phone: String
+    email: String
+    lat: String
+    lng: String
+    receivedDate: String
+}
+
+input SearchParams {
+    first_name: String
+    last_name: String
+    name: String
+
+    dob: String
+    birthday: String
+
+    address_line: String
+    street: String
+    housenumber: String
+
+    postal_code: String
+    zip: String
+
+    city: String
+
+    phone: String
+    email: String
+    lat: String
+    lng: String
+    receivedDate: String
+}
+
