@@ -125,12 +125,6 @@ class TiloresAPI:
 
         See also: https://docs.tilotech.io/tilores/api/#query-search
         """
-        record_fields = []
-        for key in params.keys():
-            if key == 'id':
-                continue
-            assert key in self.record_field_names, f'Invalid record field name: "{key}", not found in Record field names.'
-            record_fields.append(key)
         [key for key in params.keys() if key != 'id']
         var_params = Variable(name='params', type='SearchParams!')
         operation = Operation(
@@ -149,7 +143,7 @@ class TiloresAPI:
                             'hits',
                             Field(name='records', fields=[
                                 'id',
-                                *record_fields
+                                *self.record_field_names
                             ])
                         ])
                     ]
