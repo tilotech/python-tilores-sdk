@@ -158,3 +158,28 @@ class TiloresAPI:
             ]
         )
         return self.gql(operation.render(), variables={'params': params})
+
+    def entity_edges(self, entityID):
+        """
+        Searches for the edges of a single entity.
+        """
+        var_entity_id = Variable(name='entityID', type='ID!')
+        operation = Operation(
+            type='query',
+            name='get_edges',
+            variables=[var_entity_id],
+            queries=[
+                Query(
+                    name='entity',
+                    arguments=[
+                        Argument(name='input', value=Argument(name='id', value=var_entity_id))
+                    ],
+                    fields=[
+                        Field(name='entity', fields=[
+                            'edges'
+                        ])
+                    ]
+                )
+            ]
+        )
+        return self.gql(operation.render(), variables={'entityID': entityID})
