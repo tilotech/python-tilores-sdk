@@ -1,4 +1,4 @@
-from graphql import get_introspection_query, build_client_schema, print_schema
+from graphql import get_introspection_query, build_client_schema, GraphQLObjectType
 from graphql_query import Operation, Query, Argument, Variable, Field
 from functools import cached_property
 from contextlib import contextmanager
@@ -6,6 +6,7 @@ import requests
 import time
 import os
 from .record_insights import RecordInsights
+from pydantic import BaseModel
 
 class TiloresAPI:
     """A simple API client to interact with a Tilores instance."""
@@ -68,7 +69,15 @@ class TiloresAPI:
         """Perform a GraphQL query against the Tilores instance."""
         data = {'query': query}
         if variables is not None:
-            data['variables'] = variables
+            def to_serializable(val):
+                if isinstance(val, BaseModel):
+                    return val.dict()  # Converts Pydantic model to dict
+                elif isinstance(val, dict):
+                    return {k: to_serializable(v) for k, v in val.items()}
+                elif isinstance(val, list):
+                    return [to_serializable(v) for v in val]
+                return val
+            data['variables'] = to_serializable(variables)
         response = requests.post(
             self.api_url,
             headers={
@@ -94,17 +103,18 @@ class TiloresAPI:
         return [x for (x, _) in self.search_params]
 
     @cached_property
-    def record_fields(self):
-        """Get a list of tuples of field names and their type for the Record-type."""
-        record_fields = []
-        for name, graphql_field in self.schema.get_type('Record').fields.items():
-            record_fields.append((name, graphql_field.type))
-        return record_fields
+    def records_definition(self):
+        """Returns the field definition for the records field."""
+        def subfieldsOf(type):
+            subfields = []
+            for name, subfield in type.fields.items():
+                if isinstance(subfield.type, GraphQLObjectType):
+                    subfields.append(Field(name=name, fields=subfieldsOf(subfield.type)))
+                else:
+                    subfields.append(name)
+            return subfields
 
-    @cached_property
-    def record_field_names(self):
-        """Get a list of field names for the Record-type."""
-        return [x for (x, _) in self.record_fields]
+        return Field(name='records', fields=subfieldsOf(self.schema.get_type('Record')))
 
     @cached_property
     def record_params(self, refresh=False):
@@ -141,51 +151,10 @@ class TiloresAPI:
                         Field(name='entities', fields=[
                             'id',
                             'hits',
-                            Field(name='records', fields=[
-                                'id',
-                                *self.record_field_names
-                            ])
+                            self.records_definition
                         ])
                     ]
                 )
             ]
         )
         return self.gql(operation.render(), variables={'params': params})
-
-    @contextmanager
-    def build_golden_record(self, query_alias, validate_field_names=True):
-        validate_field_names = validate_field_names and self.record_field_names or None
-        record_insights = RecordInsights(alias=query_alias, validate_field_names=validate_field_names)
-        yield record_insights
-        self._golden_records[query_alias] = record_insights
-        return record_insights
-
-    def fetch_golden_record(self, query_alias:str, id:str):
-        """
-        Retrieve a unified and aggregated version of a single entity using recordInsights.
-
-        See also:
-
-        * https://docs.tilotech.io/tilores/golden-record
-        * https://docs.tilotech.io/tilores/api/#record-insights
-        """
-        record_insights = self._golden_records[query_alias]
-        operation = Operation(
-            type='query',
-            queries=[
-                Query(
-                    name='entity',
-                    arguments=[
-                        Argument(name='input', value=Argument(name='id', value=f'"{id}"'))
-                    ],
-                    fields=[
-                        Field(
-                            name='entity',
-                            fields=[record_insights]
-                        )
-                    ]
-                )
-            ]
-        )
-        return self.gql(operation.render())
-

@@ -69,7 +69,7 @@ class PydanticFactory():
                     inner_python_type = self.create_model(inner_graphql_type.name)
                     inner_python_types.append(inner_python_type)
                 python_type = typing.Union[*inner_python_types]
-            case graphql.type.definition.GraphQLObjectType(name=model_name) | graphql.type.definition.GraphQLInterfaceType(name=model_name):
+            case graphql.type.definition.GraphQLObjectType(name=model_name) | graphql.type.definition.GraphQLInterfaceType(name=model_name) | graphql.type.definition.GraphQLInputObjectType(name=model_name):
                 python_type = self.create_model(model_name)
             case _:
                 raise NotImplementedError(f'Unmatched case for GraphQL type: {graphql_type!r}')
