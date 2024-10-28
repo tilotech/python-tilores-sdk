@@ -1,8 +1,9 @@
 [project]
 name = "tilores-sdk"
-version = "0.2.0"
+version = "0.3.0"
 authors = [
   { name="Lukas Rieder", email="lukas@parlant.co" },
+  { name="Stefan Berkner", email="stefan.berkner@tilores.io" },
 ]
 description = "This is the offical SDK to develop with the Tilores entity resolution database."
 readme = "README.md"
