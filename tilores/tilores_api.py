@@ -7,6 +7,7 @@ import time
 import os
 from .record_insights import RecordInsights
 from pydantic import BaseModel
+from tilores.conversion import option_model_to_graphql_fields
 
 class TiloresAPI:
     """A simple API client to interact with a Tilores instance."""
@@ -129,13 +130,17 @@ class TiloresAPI:
         """Get a list of search parameter names for the search query."""
         return [x for (x, _) in self.record_params]
 
-    def search(self, **params):
+    def search(self, recordFieldsToQuery, searchParams):
         """
         Perform a search query with the given parameters.
 
+        Args:
+            recordFieldsToQuery: A nested dict[str,bool] of GraphQL fields to query on the record field, should be limited to relevant fields.
+            searchParams: Search parameters to use in the query.
+
         See also: https://docs.tilotech.io/tilores/api/#query-search
         """
-        [key for key in params.keys() if key != 'id']
+        recordFields=Field(name="records", fields = option_model_to_graphql_fields(recordFieldsToQuery))
         var_params = Variable(name='params', type='SearchParams!')
         operation = Operation(
             type='query',
@@ -151,13 +156,13 @@ class TiloresAPI:
                         Field(name='entities', fields=[
                             'id',
                             'hits',
-                            self.records_definition
+                            recordFields
                         ])
                     ]
                 )
             ]
         )
-        return self.gql(operation.render(), variables={'params': params})
+        return self.gql(operation.render(), variables={'params': searchParams})
 
     def entity_edges(self, entityID):
         """
